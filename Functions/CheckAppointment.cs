@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using ParseMe.Dtos;
 using SendGrid.Helpers.Mail;
 
 namespace ParseMe
@@ -50,7 +51,7 @@ namespace ParseMe
                 throw new Exception("Bad formed response!");
             }
 
-            var dto = JsonConvert.DeserializeObject<ResponseDto>(cleanText);
+            var dto = JsonConvert.DeserializeObject<IndResponseDto>(cleanText);
             var maxDays = Environment.GetEnvironmentVariable("MaxDays");
             if (String.IsNullOrWhiteSpace(maxDays))
                 maxDays = "45";
@@ -64,7 +65,6 @@ namespace ParseMe
             var message = GenerateMessage(foundAppointment);
             await messageCollector.AddAsync(message);
             log.LogInformation($"Notification sent! {foundAppointment.Date.ToShortDateString()}");
-
         }
 
         private string BuildUrl(string localtion = "DH", int personCount = 1)
@@ -90,34 +90,11 @@ namespace ParseMe
             message.SetFrom(new EmailAddress(Environment.GetEnvironmentVariable("EmailFrom")));
             message.SetSubject("New Appointment Alert!");
             return message;
-
         }
 
         private string GenerateMailBody(AppointmentDto appointment)
         {
             return $"Appointment found at {appointment.Date.ToString("dd/MMM/yyyy")} (after {appointment.Date.Subtract(DateTime.Now).Days} days)";
-        }
-
-        private class ResponseDto
-        {
-            [JsonProperty("status")]
-            public string Status { get; set; }
-            [JsonProperty("data")]
-            public IEnumerable<AppointmentDto> Data { get; set; }
-        }
-
-        private class AppointmentDto
-        {
-            [JsonProperty("key")]
-            public string Key { get; set; }
-            [JsonProperty("date")]
-            public DateTime Date { get; set; }
-            [JsonProperty("startTime")]
-            public TimeSpan StartTime { get; set; }
-            [JsonProperty("endTime")]
-            public TimeSpan Endtime { get; set; }
-            [JsonProperty("parts")]
-            public int Parts { get; set; }
         }
     }
 
