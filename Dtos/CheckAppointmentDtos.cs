@@ -28,4 +28,15 @@ namespace ParseMe.Dtos
         [JsonProperty("parts")]
         public int Parts { get; set; }
     }
+
+    public class CheckDto
+    {
+        public string UserId { get; set; }
+        public string CityCode { get; set; }
+        public int PersonCount { get; set; } = 1;
+        public int MaxDays { get; set; } = 45;
+        public string NotificationMail { get; set; }
+        public DateTime ExpireDate { get; set; }
+        public int MailQuota { get; set; }
+    }
 }

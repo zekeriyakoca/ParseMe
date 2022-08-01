@@ -14,7 +14,7 @@ namespace ParseMe
     public class CheckAppointment
     {
         private HttpClient client { get; } // TODO : If interval reduce, concider making client static and initialize in static constructer
-
+        private ILogger log { get; set; }
         public CheckAppointment()
         {
             client = new HttpClient();
@@ -30,12 +30,45 @@ namespace ParseMe
                 ILogger log
             )
         {
+            this.log = log;
             log.LogInformation($"CheckAppointment function executed at: {DateTime.Now}");
+
+            var records = await GetCheckRecordsAsync();
+
+            foreach (var record in records.Take(30))
+            {
+                await FindAndNotifyAppointmentAsync(record, async (message) =>
+                {
+                    await messageCollector.AddAsync(message);
+                    log.LogInformation($"Notification sent! Content : {message.HtmlContent}");
+                });
+            }
+
+            log.LogInformation($"CheckAppointment function execution finnished at: {DateTime.Now}");
+
+        }
+
+        private async Task<IEnumerable<CheckDto>> GetCheckRecordsAsync()
+        {
+            var records = new List<CheckDto>();
+            records.Add(new CheckDto
+            {
+                CityCode = "ZW",
+                ExpireDate = DateTime.Now.Add(TimeSpan.FromDays(30)),
+                MailQuota = 10,
+                MaxDays = 30,
+                NotificationMail = "zekeriyakocairi@gmail.com",
+                UserId = "TestUser1"
+            });
+            return records;
+        }
+
+        private async Task FindAndNotifyAppointmentAsync(CheckDto checkDto, Func<SendGridMessage, Task> sendMessageAction)
+        {
             var cleanText = "";
             try
             {
-                var cityCode = Environment.GetEnvironmentVariable("CityCode");
-                var response = await client.GetAsync(BuildUrl(localtion: cityCode));
+                var response = await client.GetAsync(BuildUrl(checkDto.CityCode, checkDto.PersonCount));
                 response.EnsureSuccessStatusCode();
                 var result = await response.Content.ReadAsStringAsync();
                 cleanText = result.Replace(")]}',\n", String.Empty); // Remove dirty string within response
@@ -52,20 +85,16 @@ namespace ParseMe
                 throw new Exception("Bad formed response!");
             }
 
-            var dto = JsonConvert.DeserializeObject<IndResponseDto>(cleanText);
-            var maxDays = Environment.GetEnvironmentVariable("MaxDays");
-            if (String.IsNullOrWhiteSpace(maxDays))
-                maxDays = "45";
-            var foundAppointment = FindClosestAppointmentWithin(dto?.Data, int.Parse(maxDays));
+            var responseDto = JsonConvert.DeserializeObject<IndResponseDto>(cleanText);
+            var foundAppointment = FindClosestAppointmentWithin(responseDto?.Data, checkDto.MaxDays);
             if (foundAppointment == default)
             {
                 log.LogInformation($"No appointment found!");
                 return;
             }
             log.LogInformation($"Appointment found! {foundAppointment.Date.ToShortDateString()}");
-            var message = GenerateMessage(foundAppointment);
-            await messageCollector.AddAsync(message);
-            log.LogInformation($"Notification sent! {foundAppointment.Date.ToShortDateString()}");
+            var message = GenerateMessage(foundAppointment, checkDto.NotificationMail);
+            await sendMessageAction(message);
         }
 
         private string BuildUrl(string localtion = "DH", int personCount = 1)
@@ -81,12 +110,12 @@ namespace ParseMe
             return appointments.Where(a => a.Date <= DateTime.Now.AddDays(maxDays)).OrderBy(a => a.Date).FirstOrDefault();
         }
 
-        private SendGridMessage GenerateMessage(AppointmentDto foundAppointment)
+        private SendGridMessage GenerateMessage(AppointmentDto foundAppointment, string emailTo)
         {
             var mailBody = GenerateMailBody(foundAppointment);
 
             var message = new SendGridMessage();
-            message.AddTo(Environment.GetEnvironmentVariable("EmailTo"));
+            message.AddTo(emailTo);
             message.AddContent("text/html", mailBody);
             message.SetFrom(new EmailAddress(Environment.GetEnvironmentVariable("EmailFrom")));
             message.SetSubject("New Appointment Alert!");
