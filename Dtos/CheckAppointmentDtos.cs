@@ -37,6 +37,8 @@ namespace ParseMe.Dtos
         public string UserId { get; set; }
         [JsonProperty("cityCode")]
         public string CityCode { get; set; }
+        [JsonProperty("productKey")]
+        public string ProductKey { get; set; }
         [JsonProperty("personCount")]
         public int PersonCount { get; set; } = 1;
         [JsonProperty("maxDays")]
@@ -62,6 +64,7 @@ namespace ParseMe.Dtos
         {
             UserId = properties["userId"].StringValue;
             CityCode = properties["cityCode"].StringValue;
+            ProductKey = properties["productKey"].StringValue;
             PersonCount = properties["personCount"].Int32Value ?? 1;
             MaxDays = properties["maxDays"].Int32Value ?? 45;
             NotificationMail = properties["notificationMail"].StringValue;

@@ -100,7 +100,7 @@ namespace ParseMe
             var cleanText = "";
             try
             {
-                var response = await client.GetAsync(BuildUrl(checkDto.CityCode, checkDto.PersonCount));
+                var response = await client.GetAsync(BuildUrl(checkDto.CityCode, checkDto.ProductKey, checkDto.PersonCount));
                 response.EnsureSuccessStatusCode();
                 var result = await response.Content.ReadAsStringAsync();
                 cleanText = result.Replace(")]}',\n", String.Empty); // Remove dirty string within response
@@ -129,10 +129,10 @@ namespace ParseMe
             await sendMessageAction(message);
         }
 
-        private string BuildUrl(string localtion = "DH", int personCount = 1)
+        private string BuildUrl(string localtion = "DH", string productKey = "DOC", int personCount = 1)
         {
-            string urlPattern = "https://oap.ind.nl/oap/api/desks/{0}/slots/?productKey=DOC&persons={1}";
-            return String.Format(urlPattern, localtion, personCount);
+            string urlPattern = "https://oap.ind.nl/oap/api/desks/{0}/slots/?productKey={1}&persons={2}";
+            return String.Format(urlPattern, localtion, productKey, personCount);
         }
 
         private AppointmentDto FindClosestAppointmentWithin(IEnumerable<AppointmentDto> appointments, int maxDays = 30)
