@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using ParseMe.Dtos;
 using SendGrid.Helpers.Mail;
+using Microsoft.Azure.Cosmos.Table;
 
 namespace ParseMe
 {
@@ -26,6 +27,7 @@ namespace ParseMe
         [FunctionName("CheckAppointment")]
         public async Task Run(
                 [TimerTrigger("0 */10 * * * *", RunOnStartup = true)] TimerInfo myTimer,
+                [Table(tableName: "IndRecords", Connection = "AzureStorageConnectionString")] CloudTable cloudTable,
                 [SendGrid(ApiKey = "CustomSendGridKeyAppSettingName")] IAsyncCollector<SendGridMessage> messageCollector,
                 ILogger log
             )
@@ -33,14 +35,14 @@ namespace ParseMe
             this.log = log;
             log.LogInformation($"CheckAppointment function executed at: {DateTime.Now}");
 
-            var records = await GetCheckRecordsAsync();
+            var records = await GetCheckRecordsAsync(cloudTable);
 
-            foreach (var record in records.Take(30))
+            foreach (var record in records)
             {
                 await FindAndNotifyAppointmentAsync(record, async (message) =>
                 {
                     await messageCollector.AddAsync(message);
-                    log.LogInformation($"Notification sent! Content : {message.HtmlContent}");
+                    log.LogInformation($"Notification sent! Content : {message.Contents.FirstOrDefault().Value}");
                 });
             }
 
@@ -48,19 +50,49 @@ namespace ParseMe
 
         }
 
-        private async Task<IEnumerable<CheckDto>> GetCheckRecordsAsync()
+        private async Task<IEnumerable<CheckDto>> GetCheckRecordsAsync(CloudTable table)
         {
-            var records = new List<CheckDto>();
-            records.Add(new CheckDto
+            await table.CreateIfNotExistsAsync();
+            var query = new TableQuery<CheckDto>();
+
+            var maxRecordsAtaTime = Environment.GetEnvironmentVariable("MaxRecordSlice");
+            if (String.IsNullOrWhiteSpace(maxRecordsAtaTime))
+                maxRecordsAtaTime = "30";
+
+            var partitionFilter = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, "IndAppointmentRequest");
+            var enabledFilter = TableQuery.GenerateFilterConditionForBool("enabled", QueryComparisons.Equal, true);
+            query = query.Where(TableQuery.CombineFilters(partitionFilter, TableOperators.And, enabledFilter))
+                         .Take(int.Parse(maxRecordsAtaTime));
+
+            var resp = await table.ExecuteQuerySegmentedAsync<CheckDto>(query, default);
+
+            log.LogInformation($"{resp.Results.Count} record/s found to check");
+
+            (var validResults, var invalidResults) = GetValidatedResults(resp.Results);
+
+            if (invalidResults.Count > 0)
             {
-                CityCode = "ZW",
-                ExpireDate = DateTime.Now.Add(TimeSpan.FromDays(30)),
-                MailQuota = 10,
-                MaxDays = 30,
-                NotificationMail = "zekeriyakocairi@gmail.com",
-                UserId = "TestUser1"
-            });
-            return records;
+                log.LogInformation($"{invalidResults} expired record/s found! They're being deleted");
+                await DeleteRecordsAsync(table, invalidResults);
+            }
+            return validResults.AsEnumerable();
+        }
+
+        private (List<CheckDto>, List<CheckDto>) GetValidatedResults(List<CheckDto> results)
+        {
+            var expiredResults = results.Where(r => r.ExpireDate <= DateTime.Now || r.MailQuota < 1).ToList();
+
+            return (valid: results.Except(expiredResults).ToList(), invalid: expiredResults);
+        }
+
+        private async Task DeleteRecordsAsync(CloudTable table, List<CheckDto> results)
+        {
+            var tableOperations = new TableBatchOperation();
+            foreach (var item in results)
+            {
+                tableOperations.Add(TableOperation.Delete(item));
+            }
+            await table.ExecuteBatchAsync(tableOperations);
         }
 
         private async Task FindAndNotifyAppointmentAsync(CheckDto checkDto, Func<SendGridMessage, Task> sendMessageAction)
@@ -93,7 +125,7 @@ namespace ParseMe
                 return;
             }
             log.LogInformation($"Appointment found! {foundAppointment.Date.ToShortDateString()}");
-            var message = GenerateMessage(foundAppointment, checkDto.NotificationMail);
+            var message = GenerateMessage(foundAppointment, checkDto.NotificationMail, checkDto.CityCode);
             await sendMessageAction(message);
         }
 
@@ -110,9 +142,9 @@ namespace ParseMe
             return appointments.Where(a => a.Date <= DateTime.Now.AddDays(maxDays)).OrderBy(a => a.Date).FirstOrDefault();
         }
 
-        private SendGridMessage GenerateMessage(AppointmentDto foundAppointment, string emailTo)
+        private SendGridMessage GenerateMessage(AppointmentDto foundAppointment, string emailTo, string cityCode)
         {
-            var mailBody = GenerateMailBody(foundAppointment);
+            var mailBody = GenerateMailBody(foundAppointment, cityCode);
 
             var message = new SendGridMessage();
             message.AddTo(emailTo);
@@ -122,9 +154,9 @@ namespace ParseMe
             return message;
         }
 
-        private string GenerateMailBody(AppointmentDto appointment)
+        private string GenerateMailBody(AppointmentDto appointment, string cityCode)
         {
-            return $"Appointment found at {appointment.Date.ToString("dd/MMM/yyyy")} (after {appointment.Date.Subtract(DateTime.Now).Days} days)";
+            return $"Appointment found at {appointment.Date.ToString("dd/MMM/yyyy")} (after {appointment.Date.Subtract(DateTime.Now).Days} days) [City Code : {cityCode}]";
         }
     }
 
