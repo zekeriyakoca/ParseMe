@@ -34,7 +34,8 @@ namespace ParseMe
             var cleanText = "";
             try
             {
-                var response = await client.GetAsync(BuildUrl());
+                var cityCode = Environment.GetEnvironmentVariable("CityCode");
+                var response = await client.GetAsync(BuildUrl(localtion: cityCode));
                 response.EnsureSuccessStatusCode();
                 var result = await response.Content.ReadAsStringAsync();
                 cleanText = result.Replace(")]}',\n", String.Empty); // Remove dirty string within response
