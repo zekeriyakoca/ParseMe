@@ -47,7 +47,6 @@ namespace ParseMe
             }
 
             log.LogInformation($"CheckAppointment function execution finnished at: {DateTime.Now}");
-
         }
 
         private async Task<IEnumerable<CheckDto>> GetCheckRecordsAsync(CloudTable table)
@@ -59,7 +58,7 @@ namespace ParseMe
             if (String.IsNullOrWhiteSpace(maxRecordsAtaTime))
                 maxRecordsAtaTime = "30";
 
-            var partitionFilter = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, "IndAppointmentRequest");
+            var partitionFilter = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, Constants.PartitionKey);
             var enabledFilter = TableQuery.GenerateFilterConditionForBool("enabled", QueryComparisons.Equal, true);
             query = query.Where(TableQuery.CombineFilters(partitionFilter, TableOperators.And, enabledFilter))
                          .Take(int.Parse(maxRecordsAtaTime));

@@ -1,6 +1,7 @@
 ﻿using Azure;
 using Microsoft.Azure.Cosmos.Table;
 using Newtonsoft.Json;
+using ParseMe.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,46 +12,46 @@ namespace ParseMe.Dtos
 {
     public class IndResponseDto
     {
-        [JsonProperty("status")]
+        [JsonProperty("Status")]
         public string Status { get; set; }
-        [JsonProperty("data")]
+        [JsonProperty("Data")]
         public IEnumerable<AppointmentDto> Data { get; set; }
     }
 
     public class AppointmentDto
     {
-        [JsonProperty("key")]
+        [JsonProperty("Key")]
         public string Key { get; set; }
-        [JsonProperty("date")]
+        [JsonProperty("Date")]
         public DateTime Date { get; set; }
-        [JsonProperty("startTime")]
+        [JsonProperty("StartTime")]
         public TimeSpan StartTime { get; set; }
-        [JsonProperty("endTime")]
+        [JsonProperty("EndTime")]
         public TimeSpan Endtime { get; set; }
-        [JsonProperty("parts")]
+        [JsonProperty("Parts")]
         public int Parts { get; set; }
     }
 
     public class CheckDto : ITableEntity
     {
-        [JsonProperty("userId")]
+        [JsonProperty("UserId")]
         public string UserId { get; set; }
-        [JsonProperty("cityCode")]
+        [JsonProperty("CityCode")]
         public string CityCode { get; set; }
-        [JsonProperty("productKey")]
+        [JsonProperty("ProductKey")]
         public string ProductKey { get; set; }
-        [JsonProperty("personCount")]
+        [JsonProperty("PersonCount")]
         public int PersonCount { get; set; } = 1;
-        [JsonProperty("maxDays")]
+        [JsonProperty("MaxDays")]
         public int MaxDays { get; set; } = 45;
-        [JsonProperty("notificationMail")]
+        [JsonProperty("NotificationMail")]
         public string NotificationMail { get; set; }
-        [JsonProperty("expireDate")]
+        [JsonProperty("ExpireDate")]
         public DateTime ExpireDate { get; set; }
         // TODO : This quota will be reduced on each email sent
-        [JsonProperty("mailQuota")]
+        [JsonProperty("MailQuota")]
         public int MailQuota { get; set; }
-        [JsonProperty("enabled")]
+        [JsonProperty("Enabled")]
         public bool Enabled { get; set; } = true;
 
         public string PartitionKey { get; set; }
@@ -62,20 +63,28 @@ namespace ParseMe.Dtos
 
         public void ReadEntity(IDictionary<string, EntityProperty> properties, OperationContext operationContext)
         {
-            UserId = properties["userId"].StringValue;
-            CityCode = properties["cityCode"].StringValue;
-            ProductKey = properties["productKey"].StringValue;
-            PersonCount = properties["personCount"].Int32Value ?? 1;
-            MaxDays = properties["maxDays"].Int32Value ?? 45;
-            NotificationMail = properties["notificationMail"].StringValue;
-            ExpireDate = properties["expireDate"].DateTime ?? DateTime.Now.AddDays(30);
-            MailQuota = properties["mailQuota"].Int32Value ?? 10;
-            Enabled = properties["enabled"].BooleanValue ?? true;
+            UserId = properties["UserId"].StringValue;
+            CityCode = properties["CityCode"].StringValue;
+            ProductKey = properties["ProductKey"].StringValue;
+            PersonCount = properties["PersonCount"].Int32Value ?? 1;
+            MaxDays = properties["MaxDays"].Int32Value ?? 45;
+            NotificationMail = properties["NotificationMail"].StringValue;
+            ExpireDate = properties["ExpireDate"].DateTime ?? DateTime.Now.AddDays(30);
+            MailQuota = properties["MailQuota"].Int32Value ?? 10;
+            Enabled = properties["Enabled"].BooleanValue ?? true;
         }
 
         public IDictionary<string, EntityProperty> WriteEntity(OperationContext operationContext)
         {
-            throw new NotImplementedException();
+            var result = PropertyHelper.WriteEntity(this, operationContext);
+            return result;
         }
+
+        public bool Validate()
+        {
+            // TODO : Complete
+            return true;
+        }
+
     }
 }
