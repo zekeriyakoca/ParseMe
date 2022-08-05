@@ -86,7 +86,7 @@ namespace ParseMe.Dtos
             return true;
         }
     }
-    public class PersonalCode : ITableEntity
+    public class PersonalCodeDto : ITableEntity
     {
         [JsonProperty("Code")]
         public string Code { get; set; }

@@ -24,7 +24,18 @@ namespace ParseMe.Binders
                 PartitionKey = Constants.IndAppointmentPartitionKey,
                 RowKey = Guid.NewGuid().ToString(),
                 UserId = "Default User"
-        };
+            };
+        }
+        public static PersonalCodeDto ToPersonalCodeDto(this UpsertPersonalCodeRequestDto requestDto)
+        {
+            return new PersonalCodeDto
+            {
+                Code = Guid.NewGuid().ToString(),
+                Email = requestDto.Email,
+                ExpireDate = requestDto.ExpireDate,
+                PartitionKey = Constants.IndPersonalCodePartitionKey,
+                RowKey = Guid.NewGuid().ToString()
+            };
+        }
     }
-}
 }

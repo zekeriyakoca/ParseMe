@@ -33,6 +33,9 @@ namespace ParseMe.Functions
         [OpenApiParameter(name: "personalCode", In = ParameterLocation.Query, Required = true, Type = typeof(string), Description = "Personal Code provided by authorized user")]
         [OpenApiRequestBody(contentType: "application/json", bodyType: typeof(UpsertAppointmentRequestDto), Description = "Model", Required = true)]
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "text/plain", bodyType: typeof(string), Description = "The OK response")]
+        [OpenApiResponseWithoutBody(statusCode: HttpStatusCode.Unauthorized, Description = "Unauthorized response")]
+        [OpenApiResponseWithBody(statusCode: HttpStatusCode.BadRequest, contentType: "text/plain", bodyType: typeof(string), Description = "BadRequestResult response with body")]
+        [OpenApiResponseWithoutBody(statusCode: HttpStatusCode.BadRequest, Description = "BadRequestResult response without body")]
         public async Task<IActionResult> Run(
            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
            [Table(tableName: "IndRecords", Connection = "AzureStorageConnectionString")] CloudTable indRecordsTable,
@@ -41,20 +44,20 @@ namespace ParseMe.Functions
         {
             _logger.LogInformation("UpsertAppointment function processed a request.");
 
-            string personalCode = req.Query["personalCode"]; // TODO : Implement personalCode validation
+            string personalCode = req.Query["personalCode"];
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             var dto = JsonConvert.DeserializeObject<UpsertAppointmentRequestDto>(requestBody);
 
-            if (!dto.IsValid())
-            {
-                _logger.LogWarning($"Request body couldn't be validated! Body : {requestBody}");
-                return new BadRequestObjectResult("Body couldn't be validated! Please check your data on request body.");
-            }
             if (dto == default)
             {
                 _logger.LogError($"Request body couldn't be serialized properly! Email : {requestBody}");
                 return new BadRequestResult();
+            }
+            if (!dto.IsValid())
+            {
+                _logger.LogWarning($"Request body couldn't be validated! Body : {requestBody}");
+                return new BadRequestObjectResult("Body couldn't be validated! Please check your data on request body.");
             }
             if (!await ValidateCodeAsync(dto, personalCode, personalCodesTable))
             {
@@ -63,12 +66,6 @@ namespace ParseMe.Functions
             }
 
             var updatedRecord = await UpsertRecordAsync(indRecordsTable, dto.ToCheckDto());
-
-            if (updatedRecord == default)
-            {
-                _logger.LogError($"Model in request body couldn't be validated! Body : {requestBody}");
-                return new BadRequestObjectResult("Please check your parameters. Parameters couldn't be validated.");
-            }
 
             _logger.LogInformation($"Record upserted properly. RowKey : {updatedRecord.RowKey}");
 
@@ -82,9 +79,9 @@ namespace ParseMe.Functions
 
             await table.CreateIfNotExistsAsync();
             var mailFilter = TableQuery.GenerateFilterCondition("Code", QueryComparisons.Equal, personalCode);
-            var query = new TableQuery<PersonalCode>().Where(mailFilter);
+            var query = new TableQuery<PersonalCodeDto>().Where(mailFilter);
 
-            var codeRecord = (await table.ExecuteQuerySegmentedAsync<PersonalCode>(query, default)).FirstOrDefault();
+            var codeRecord = (await table.ExecuteQuerySegmentedAsync<PersonalCodeDto>(query, default)).FirstOrDefault();
             if (codeRecord == null)
             {
                 return false;
@@ -103,11 +100,6 @@ namespace ParseMe.Functions
 
         private async Task<CheckDto> UpsertRecordAsync(CloudTable table, CheckDto dto)
         {
-            if (!dto.Validate())
-            {
-                return null;
-            }
-
             try
             {
                 await table.CreateIfNotExistsAsync();
