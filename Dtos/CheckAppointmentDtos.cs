@@ -85,6 +85,40 @@ namespace ParseMe.Dtos
             // TODO : Complete
             return true;
         }
+    }
+    public class PersonalCode : ITableEntity
+    {
+        [JsonProperty("Code")]
+        public string Code { get; set; }
+        [JsonProperty("Email")]
+        public string Email { get; set; }
+        [JsonProperty("ExpireDate")]
+        public DateTime ExpireDate { get; set; }
 
+        public string PartitionKey { get; set; }
+        public string RowKey { get; set; }
+        public DateTimeOffset? Timestamp { get; set; }
+        public ETag ETag { get; set; }
+        DateTimeOffset ITableEntity.Timestamp { get; set; }
+        string ITableEntity.ETag { get; set; }
+
+        public void ReadEntity(IDictionary<string, EntityProperty> properties, OperationContext operationContext)
+        {
+            Code = properties["Code"].StringValue;
+            Email = properties["Email"].StringValue;
+            ExpireDate = properties["ExpireDate"].DateTime ?? DateTime.Now.AddDays(30);
+        }
+
+        public IDictionary<string, EntityProperty> WriteEntity(OperationContext operationContext)
+        {
+            var result = PropertyHelper.WriteEntity(this, operationContext);
+            return result;
+        }
+
+        public bool Validate()
+        {
+            // TODO : Complete
+            return true;
+        }
     }
 }

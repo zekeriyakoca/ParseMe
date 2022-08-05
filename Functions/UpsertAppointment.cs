@@ -35,7 +35,8 @@ namespace ParseMe.Functions
         [OpenApiResponseWithBody(statusCode: HttpStatusCode.OK, contentType: "text/plain", bodyType: typeof(string), Description = "The OK response")]
         public async Task<IActionResult> Run(
            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
-           [Table(tableName: "IndRecords", Connection = "AzureStorageConnectionString")] CloudTable cloudTable
+           [Table(tableName: "IndRecords", Connection = "AzureStorageConnectionString")] CloudTable indRecordsTable,
+           [Table(tableName: "IndPersonalCodes", Connection = "AzureStorageConnectionString")] CloudTable personalCodesTable
         )
         {
             _logger.LogInformation("UpsertAppointment function processed a request.");
@@ -45,13 +46,23 @@ namespace ParseMe.Functions
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             var dto = JsonConvert.DeserializeObject<UpsertAppointmentRequestDto>(requestBody);
 
+            if (!dto.IsValid())
+            {
+                _logger.LogWarning($"Request body couldn't be validated! Body : {requestBody}");
+                return new BadRequestObjectResult("Body couldn't be validated! Please check your data on request body.");
+            }
             if (dto == default)
             {
-                _logger.LogError($"Request body couldn't be serialized properly! Body : {requestBody}");
+                _logger.LogError($"Request body couldn't be serialized properly! Email : {requestBody}");
                 return new BadRequestResult();
             }
+            if (!await ValidateCodeAsync(dto, personalCode, personalCodesTable))
+            {
+                _logger.LogError($"Mail address and personal Code couldn't be validated! Email : {dto.NotificationMail}, Personal Code : {personalCode}");
+                return new UnauthorizedResult();
+            }
 
-            var updatedRecord = await UpsertRecordAsync(cloudTable, dto.ToCheckDto());
+            var updatedRecord = await UpsertRecordAsync(indRecordsTable, dto.ToCheckDto());
 
             if (updatedRecord == default)
             {
@@ -62,6 +73,32 @@ namespace ParseMe.Functions
             _logger.LogInformation($"Record upserted properly. RowKey : {updatedRecord.RowKey}");
 
             return new OkObjectResult("Success");
+        }
+
+        private async Task<bool> ValidateCodeAsync(UpsertAppointmentRequestDto dto, string personalCode, CloudTable table)
+        {
+            if (String.IsNullOrWhiteSpace(personalCode))
+                return false;
+
+            await table.CreateIfNotExistsAsync();
+            var mailFilter = TableQuery.GenerateFilterCondition("Code", QueryComparisons.Equal, personalCode);
+            var query = new TableQuery<PersonalCode>().Where(mailFilter);
+
+            var codeRecord = (await table.ExecuteQuerySegmentedAsync<PersonalCode>(query, default)).FirstOrDefault();
+            if (codeRecord == null)
+            {
+                return false;
+            }
+            if (codeRecord.Email != dto.NotificationMail && codeRecord.Email != Constants.AdminCode)
+            {
+                return false;
+            }
+            if (codeRecord.ExpireDate <= DateTime.Now)
+            {
+                await table.ExecuteAsync(TableOperation.Delete(codeRecord));
+                return false;
+            }
+            return true;
         }
 
         private async Task<CheckDto> UpsertRecordAsync(CloudTable table, CheckDto dto)
@@ -104,7 +141,7 @@ namespace ParseMe.Functions
                 _logger.LogError("Error occured while upserting a record!", ex);
                 throw;
             }
-            
+
             return dto;
 
         }

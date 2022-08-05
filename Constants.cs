@@ -8,6 +8,8 @@ namespace ParseMe
 {
     internal static class Constants
     {
-        internal const string PartitionKey = "IndAppointmentRequest";
+        internal const string IndAppointmentPartitionKey = "IndAppointmentRequest";
+        internal const string IndPersonalCodePartitionKey = "IndPersonalCode";
+        internal const string AdminCode = "**Admin**@**Admin**.com";
     }
 }

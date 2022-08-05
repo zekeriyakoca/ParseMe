@@ -21,7 +21,7 @@ namespace ParseMe.Binders
                 ExpireDate = requestDto.ExpireDate,
                 MailQuota = requestDto.MailQuota,
                 Enabled = requestDto.Enabled,
-                PartitionKey = Constants.PartitionKey,
+                PartitionKey = Constants.IndAppointmentPartitionKey,
                 RowKey = Guid.NewGuid().ToString(),
                 UserId = "Default User"
         };

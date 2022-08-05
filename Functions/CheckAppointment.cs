@@ -58,7 +58,7 @@ namespace ParseMe
             if (String.IsNullOrWhiteSpace(maxRecordsAtaTime))
                 maxRecordsAtaTime = "30";
 
-            var partitionFilter = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, Constants.PartitionKey);
+            var partitionFilter = TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, Constants.IndAppointmentPartitionKey);
             var enabledFilter = TableQuery.GenerateFilterConditionForBool("enabled", QueryComparisons.Equal, true);
             query = query.Where(TableQuery.CombineFilters(partitionFilter, TableOperators.And, enabledFilter))
                          .Take(int.Parse(maxRecordsAtaTime));
